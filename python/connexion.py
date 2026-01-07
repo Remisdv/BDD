@@ -1,11 +1,12 @@
 """
 Module de connexion à la base de données PostgreSQL
-Utilise psycopg2 pour la connexion directe
+Utilise SQLAlchemy avec sessionmaker
 """
 
-import psycopg2
 import os
 from pathlib import Path
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Charger le .env depuis le dossier parent
 env_path = Path(__file__).parent.parent / '.env'
@@ -18,42 +19,30 @@ if env_path.exists():
                 os.environ.setdefault(key.strip(), value.strip())
 
 # Configuration de la base de données (depuis .env)
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'database': os.getenv('POSTGRES_DB', 'gestion_stock'),
-    'user': os.getenv('POSTGRES_USER', 'stock_user'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'stock_password')
-}
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('POSTGRES_DB', 'gestion_stock')
+DB_USER = os.getenv('POSTGRES_USER', 'stock_user')
+DB_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'stock_password')
+
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# Créer le moteur SQLAlchemy
+engine = create_engine(DATABASE_URL, echo=False)
+
+# Créer la factory de sessions
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base pour les modèles ORM
+Base = declarative_base()
 
 
-def get_connexion():
+def get_session():
     """
-    Crée et retourne une connexion à la base de données.
+    Crée et retourne une nouvelle session.
+    À utiliser avec un context manager ou à fermer manuellement.
     """
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        return conn
-    except psycopg2.Error as e:
-        print(f"Erreur de connexion à la base de données: {e}")
-        raise
-
-
-def get_curseur(conn):
-    """
-    Crée et retourne un curseur à partir d'une connexion.
-    """
-    return conn.cursor()
-
-
-def fermer_connexion(conn, curseur=None):
-    """
-    Ferme proprement le curseur et la connexion.
-    """
-    if curseur:
-        curseur.close()
-    if conn:
-        conn.close()
+    return SessionLocal()
 
 
 def test_connexion():
@@ -62,10 +51,9 @@ def test_connexion():
     Retourne True si OK, False sinon.
     """
     try:
-        conn = get_connexion()
-        curseur = get_curseur(conn)
-        curseur.execute("SELECT 1")
-        fermer_connexion(conn, curseur)
+        session = get_session()
+        session.execute(text("SELECT 1"))
+        session.close()
         return True
     except Exception as e:
         print(f"Erreur de test de connexion: {e}")

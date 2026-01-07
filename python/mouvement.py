@@ -1,129 +1,112 @@
 """
-CRUD pour la table mouvements_stock
+CRUD pour la table mouvements_stock avec SQLAlchemy
 """
 
-from connexion import get_connexion, get_curseur, fermer_connexion
+from connexion import get_session
+from models import MouvementStock, Produit
 
 
 def entree_stock(produit_id, quantite, motif=None):
     """Enregistrer une entrée de stock"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
+        # Vérifier que le produit existe
+        produit = session.query(Produit).filter(Produit.id == produit_id).first()
+        if not produit:
+            print("Produit non trouvé")
+            return None
+        
         # Créer le mouvement
-        curseur.execute(
-            """INSERT INTO mouvements_stock (produit_id, type_mouvement, quantite, motif) 
-               VALUES (%s, 'ENTREE', %s, %s) RETURNING id""",
-            (produit_id, quantite, motif)
+        mouvement = MouvementStock(
+            produit_id=produit_id,
+            type_mouvement='ENTREE',
+            quantite=quantite,
+            motif=motif
         )
-        mouvement_id = curseur.fetchone()[0]
+        session.add(mouvement)
         
         # Mettre à jour le stock du produit
-        curseur.execute(
-            "UPDATE produits SET quantite_stock = quantite_stock + %s WHERE id = %s",
-            (quantite, produit_id)
-        )
+        produit.quantite_stock += quantite
         
-        conn.commit()
-        return mouvement_id
+        session.commit()
+        return mouvement.id
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de l'entrée de stock: {e}")
         return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def sortie_stock(produit_id, quantite, motif=None):
     """Enregistrer une sortie de stock"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        # Vérifier le stock disponible
-        curseur.execute(
-            "SELECT quantite_stock FROM produits WHERE id = %s",
-            (produit_id,)
-        )
-        result = curseur.fetchone()
-        
-        if not result:
+        # Vérifier que le produit existe
+        produit = session.query(Produit).filter(Produit.id == produit_id).first()
+        if not produit:
             print("Produit non trouvé")
             return None
         
-        stock_actuel = result[0]
-        if stock_actuel < quantite:
-            print(f"Stock insuffisant. Disponible: {stock_actuel}")
+        # Vérifier le stock disponible
+        if produit.quantite_stock < quantite:
+            print(f"Stock insuffisant. Disponible: {produit.quantite_stock}")
             return None
         
         # Créer le mouvement
-        curseur.execute(
-            """INSERT INTO mouvements_stock (produit_id, type_mouvement, quantite, motif) 
-               VALUES (%s, 'SORTIE', %s, %s) RETURNING id""",
-            (produit_id, quantite, motif)
+        mouvement = MouvementStock(
+            produit_id=produit_id,
+            type_mouvement='SORTIE',
+            quantite=quantite,
+            motif=motif
         )
-        mouvement_id = curseur.fetchone()[0]
+        session.add(mouvement)
         
         # Mettre à jour le stock du produit
-        curseur.execute(
-            "UPDATE produits SET quantite_stock = quantite_stock - %s WHERE id = %s",
-            (quantite, produit_id)
-        )
+        produit.quantite_stock -= quantite
         
-        conn.commit()
-        return mouvement_id
+        session.commit()
+        return mouvement.id
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la sortie de stock: {e}")
         return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def lire_mouvements(limite=50):
     """Lire les derniers mouvements de stock"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute("""
-            SELECT m.id, p.reference, p.nom, m.type_mouvement, m.quantite, 
-                   m.motif, m.date_mouvement
-            FROM mouvements_stock m
-            JOIN produits p ON m.produit_id = p.id
-            ORDER BY m.date_mouvement DESC
-            LIMIT %s
-        """, (limite,))
-        return curseur.fetchall()
+        mouvements = session.query(MouvementStock).order_by(
+            MouvementStock.date_mouvement.desc()
+        ).limit(limite).all()
+        
+        result = []
+        for m in mouvements:
+            result.append((
+                m.id,
+                m.produit.reference if m.produit else None,
+                m.produit.nom if m.produit else None,
+                m.type_mouvement,
+                m.quantite,
+                m.motif,
+                m.date_mouvement
+            ))
+        return result
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def historique_produit(produit_id):
     """Obtenir l'historique des mouvements d'un produit"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute("""
-            SELECT m.id, m.type_mouvement, m.quantite, m.motif, m.date_mouvement
-            FROM mouvements_stock m
-            WHERE m.produit_id = %s
-            ORDER BY m.date_mouvement DESC
-        """, (produit_id,))
-        return curseur.fetchall()
+        mouvements = session.query(MouvementStock).filter(
+            MouvementStock.produit_id == produit_id
+        ).order_by(MouvementStock.date_mouvement.desc()).all()
+        
+        return [(m.id, m.type_mouvement, m.quantite, m.motif, m.date_mouvement) for m in mouvements]
     finally:
-        fermer_connexion(conn, curseur)
-
-
-def supprimer_mouvement(mouvement_id):
-    """Supprimer un mouvement (attention: ne recalcule pas le stock)"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
-    try:
-        curseur.execute("DELETE FROM mouvements_stock WHERE id = %s", (mouvement_id,))
-        conn.commit()
-        return curseur.rowcount > 0
-    except Exception as e:
-        conn.rollback()
-        print(f"Erreur lors de la suppression: {e}")
-        return False
-    finally:
-        fermer_connexion(conn, curseur)
+        session.close()

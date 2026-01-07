@@ -5,7 +5,6 @@ Menu interactif en console
 
 import os
 import sys
-import uuid
 from tabulate import tabulate
 
 # Import des modules CRUD
@@ -19,7 +18,7 @@ from produit import (creer_produit, lire_produits, lire_produit, modifier_produi
                      produits_par_categorie)
 from mouvement import (entree_stock, sortie_stock, lire_mouvements, historique_produit)
 from utilisateur import (authentifier, creer_utilisateur, lire_utilisateurs,
-                         modifier_mot_de_passe, desactiver_utilisateur)
+                         modifier_mot_de_passe, desactiver_utilisateur, compter_utilisateurs)
 
 
 # Variable globale pour l'utilisateur connecté
@@ -67,17 +66,25 @@ def saisie_float(message, defaut=None):
             print("Veuillez entrer un nombre valide.")
 
 
-def saisie_uuid(message):
-    """Saisie sécurisée d'un UUID"""
+def selectionner_element(liste, message="Votre choix"):
+    """
+    Sélectionner un élément par son numéro dans une liste.
+    Retourne l'UUID (premier élément du tuple) ou None.
+    """
+    if not liste:
+        return None
+    
     while True:
-        valeur = input(message)
-        if valeur == "":
+        choix = input(f"\n{message} (1-{len(liste)}, 0=annuler): ")
+        if choix == "0" or choix == "":
             return None
         try:
-            uuid.UUID(valeur)
-            return valeur
+            index = int(choix) - 1
+            if 0 <= index < len(liste):
+                return liste[index][0]  # Retourne l'UUID
+            print(f"Entrez un nombre entre 1 et {len(liste)}")
         except ValueError:
-            print("UUID invalide. Format attendu: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+            print("Veuillez entrer un nombre valide.")
 
 
 # ============================================
@@ -89,7 +96,7 @@ def menu_principal():
     while True:
         clear_screen()
         afficher_titre("GESTION DE STOCK - Menu Principal")
-        print(f"\nConnecté en tant que: {utilisateur_connecte[1]} ({utilisateur_connecte[2]})")
+        print(f"\nConnecté: {utilisateur_connecte[1]} ({utilisateur_connecte[2]})")
         print("\n1. Gestion des Produits")
         print("2. Gestion des Catégories")
         print("3. Gestion des Fournisseurs")
@@ -140,7 +147,7 @@ def menu_produits():
         if choix == "1":
             lister_produits()
         elif choix == "2":
-            rechercher_produit()
+            rechercher_produit_menu()
         elif choix == "3":
             ajouter_produit()
         elif choix == "4":
@@ -153,21 +160,34 @@ def menu_produits():
             return
 
 
+def afficher_produits_tableau(produits, avec_numero=True):
+    """Affiche les produits dans un tableau formaté"""
+    if not produits:
+        print("\nAucun produit trouvé.")
+        return
+    
+    if avec_numero:
+        headers = ["#", "Réf.", "Nom", "Prix", "Stock", "Seuil", "Catégorie", "Fournisseur"]
+        data = [[i+1, p[1], p[2], f"{p[3]}€", p[4], p[5], p[6] or "-", p[7] or "-"] 
+                for i, p in enumerate(produits)]
+    else:
+        headers = ["Réf.", "Nom", "Prix", "Stock", "Seuil", "Catégorie", "Fournisseur"]
+        data = [[p[1], p[2], f"{p[3]}€", p[4], p[5], p[6] or "-", p[7] or "-"] 
+                for p in produits]
+    
+    print(tabulate(data, headers=headers, tablefmt="grid"))
+
+
 def lister_produits():
     """Afficher la liste des produits"""
     clear_screen()
     afficher_titre("Liste des Produits")
     produits = lire_produits()
-    
-    if produits:
-        headers = ["ID", "Réf.", "Nom", "Prix", "Stock", "Seuil", "Catégorie", "Fournisseur"]
-        print(tabulate(produits, headers=headers, tablefmt="grid"))
-    else:
-        print("\nAucun produit trouvé.")
+    afficher_produits_tableau(produits)
     pause()
 
 
-def rechercher_produit():
+def rechercher_produit_menu():
     """Rechercher des produits"""
     clear_screen()
     afficher_titre("Rechercher un Produit")
@@ -175,11 +195,7 @@ def rechercher_produit():
     
     if terme:
         produits = rechercher_produits(terme)
-        if produits:
-            headers = ["ID", "Réf.", "Nom", "Prix", "Stock", "Seuil", "Catégorie", "Fournisseur"]
-            print(tabulate(produits, headers=headers, tablefmt="grid"))
-        else:
-            print("\nAucun produit trouvé.")
+        afficher_produits_tableau(produits)
     pause()
 
 
@@ -192,13 +208,15 @@ def ajouter_produit():
     print("\nCatégories disponibles:")
     categories = lire_categories()
     if categories:
-        print(tabulate(categories, headers=["ID", "Nom", "Description"], tablefmt="simple"))
+        data = [[i+1, c[1], c[2] or "-"] for i, c in enumerate(categories)]
+        print(tabulate(data, headers=["#", "Nom", "Description"], tablefmt="simple"))
     
     # Afficher les fournisseurs disponibles
     print("\nFournisseurs disponibles:")
     fournisseurs = lire_fournisseurs()
     if fournisseurs:
-        print(tabulate([[f[0], f[1]] for f in fournisseurs], headers=["ID", "Nom"], tablefmt="simple"))
+        data = [[i+1, f[1]] for i, f in enumerate(fournisseurs)]
+        print(tabulate(data, headers=["#", "Nom"], tablefmt="simple"))
     
     print("\n--- Informations du produit ---")
     reference = input("Référence: ")
@@ -208,16 +226,13 @@ def ajouter_produit():
     quantite = saisie_int("Quantité initiale (défaut: 0): ", 0)
     seuil = saisie_int("Seuil d'alerte (défaut: 10): ", 10)
     
-    cat_id = input("ID Catégorie (optionnel): ")
-    cat_id = int(cat_id) if cat_id else None
-    
-    four_id = input("ID Fournisseur (optionnel): ")
-    four_id = int(four_id) if four_id else None
+    cat_id = selectionner_element(categories, "N° Catégorie") if categories else None
+    four_id = selectionner_element(fournisseurs, "N° Fournisseur") if fournisseurs else None
     
     produit_id = creer_produit(reference, nom, prix, description, quantite, seuil, cat_id, four_id)
     
     if produit_id:
-        print(f"\n✓ Produit créé avec succès (ID: {produit_id})")
+        print(f"\n✓ Produit créé avec succès")
     else:
         print("\n✗ Erreur lors de la création du produit")
     pause()
@@ -228,23 +243,29 @@ def modifier_produit_menu():
     clear_screen()
     afficher_titre("Modifier un Produit")
     
-    produit_id = saisie_uuid("ID du produit à modifier: ")
-    if not produit_id:
-        print("\n✗ ID requis")
+    produits = lire_produits()
+    if not produits:
+        print("\nAucun produit à modifier.")
         pause()
         return
-    produit = lire_produit(produit_id)
     
+    afficher_produits_tableau(produits)
+    produit_id = selectionner_element(produits, "N° du produit à modifier")
+    
+    if not produit_id:
+        return
+    
+    produit = lire_produit(produit_id)
     if not produit:
         print("\n✗ Produit non trouvé")
         pause()
         return
     
-    print(f"\nProduit actuel: {produit[2]} (Réf: {produit[1]})")
+    print(f"\nProduit: {produit[2]} (Réf: {produit[1]})")
     print("Laissez vide pour conserver la valeur actuelle.\n")
     
     nom = input(f"Nom [{produit[2]}]: ") or None
-    description = input(f"Description [{produit[3]}]: ") or None
+    description = input(f"Description [{produit[3] or '-'}]: ") or None
     
     prix_input = input(f"Prix [{produit[4]}]: ")
     prix = float(prix_input) if prix_input else None
@@ -270,18 +291,19 @@ def supprimer_produit_menu():
     clear_screen()
     afficher_titre("Supprimer un Produit")
     
-    produit_id = saisie_uuid("ID du produit à supprimer: ")
+    produits = lire_produits()
+    if not produits:
+        print("\nAucun produit à supprimer.")
+        pause()
+        return
+    
+    afficher_produits_tableau(produits)
+    produit_id = selectionner_element(produits, "N° du produit à supprimer")
+    
     if not produit_id:
-        print("\n✗ ID requis")
-        pause()
         return
+    
     produit = lire_produit(produit_id)
-    
-    if not produit:
-        print("\n✗ Produit non trouvé")
-        pause()
-        return
-    
     print(f"\nProduit: {produit[2]} (Réf: {produit[1]})")
     confirm = input("Confirmer la suppression? (oui/non): ")
     
@@ -300,16 +322,21 @@ def voir_produit():
     clear_screen()
     afficher_titre("Détails du Produit")
     
-    produit_id = saisie_uuid("ID du produit: ")
-    if not produit_id:
-        print("\n✗ ID requis")
+    produits = lire_produits()
+    if not produits:
+        print("\nAucun produit.")
         pause()
         return
-    produit = lire_produit(produit_id)
     
+    afficher_produits_tableau(produits)
+    produit_id = selectionner_element(produits, "N° du produit à afficher")
+    
+    if not produit_id:
+        return
+    
+    produit = lire_produit(produit_id)
     if produit:
         print(f"\n{'='*40}")
-        print(f"ID:           {produit[0]}")
         print(f"Référence:    {produit[1]}")
         print(f"Nom:          {produit[2]}")
         print(f"Description:  {produit[3] or '-'}")
@@ -324,12 +351,11 @@ def voir_produit():
         print("\nHistorique des mouvements:")
         mouvements = historique_produit(produit_id)
         if mouvements:
-            headers = ["ID", "Type", "Qté", "Motif", "Date"]
-            print(tabulate(mouvements, headers=headers, tablefmt="simple"))
+            headers = ["Type", "Qté", "Motif", "Date"]
+            data = [[m[1], m[2], m[3] or "-", str(m[4])[:19]] for m in mouvements]
+            print(tabulate(data, headers=headers, tablefmt="simple"))
         else:
             print("Aucun mouvement enregistré.")
-    else:
-        print("\n✗ Produit non trouvé")
     pause()
 
 
@@ -352,7 +378,7 @@ def menu_categories():
         choix = input("\nVotre choix: ")
         
         if choix == "1":
-            lister_categories()
+            lister_categories_menu()
         elif choix == "2":
             ajouter_categorie()
         elif choix == "3":
@@ -365,17 +391,23 @@ def menu_categories():
             return
 
 
-def lister_categories():
+def afficher_categories_tableau(categories):
+    """Affiche les catégories dans un tableau"""
+    if not categories:
+        print("\nAucune catégorie trouvée.")
+        return
+    
+    headers = ["#", "Nom", "Description"]
+    data = [[i+1, c[1], c[2] or "-"] for i, c in enumerate(categories)]
+    print(tabulate(data, headers=headers, tablefmt="grid"))
+
+
+def lister_categories_menu():
     """Afficher la liste des catégories"""
     clear_screen()
     afficher_titre("Liste des Catégories")
     categories = lire_categories()
-    
-    if categories:
-        headers = ["ID", "Nom", "Description"]
-        print(tabulate(categories, headers=headers, tablefmt="grid"))
-    else:
-        print("\nAucune catégorie trouvée.")
+    afficher_categories_tableau(categories)
     pause()
 
 
@@ -390,7 +422,7 @@ def ajouter_categorie():
     cat_id = creer_categorie(nom, description)
     
     if cat_id:
-        print(f"\n✓ Catégorie créée avec succès (ID: {cat_id})")
+        print(f"\n✓ Catégorie créée avec succès")
     else:
         print("\n✗ Erreur lors de la création")
     pause()
@@ -401,21 +433,22 @@ def modifier_categorie_menu():
     clear_screen()
     afficher_titre("Modifier une Catégorie")
     
-    cat_id = saisie_uuid("ID de la catégorie: ")
+    categories = lire_categories()
+    if not categories:
+        print("\nAucune catégorie à modifier.")
+        pause()
+        return
+    
+    afficher_categories_tableau(categories)
+    cat_id = selectionner_element(categories, "N° de la catégorie à modifier")
+    
     if not cat_id:
-        print("\n✗ ID requis")
-        pause()
         return
+    
     categorie = lire_categorie(cat_id)
-    
-    if not categorie:
-        print("\n✗ Catégorie non trouvée")
-        pause()
-        return
-    
-    print(f"\nCatégorie actuelle: {categorie[1]}")
+    print(f"\nCatégorie: {categorie[1]}")
     nom = input(f"Nouveau nom [{categorie[1]}]: ") or None
-    description = input(f"Nouvelle description [{categorie[2]}]: ") or None
+    description = input(f"Nouvelle description [{categorie[2] or '-'}]: ") or None
     
     if modifier_categorie(cat_id, nom, description):
         print("\n✓ Catégorie modifiée avec succès")
@@ -429,18 +462,19 @@ def supprimer_categorie_menu():
     clear_screen()
     afficher_titre("Supprimer une Catégorie")
     
-    cat_id = saisie_uuid("ID de la catégorie: ")
+    categories = lire_categories()
+    if not categories:
+        print("\nAucune catégorie à supprimer.")
+        pause()
+        return
+    
+    afficher_categories_tableau(categories)
+    cat_id = selectionner_element(categories, "N° de la catégorie à supprimer")
+    
     if not cat_id:
-        print("\n✗ ID requis")
-        pause()
         return
+    
     categorie = lire_categorie(cat_id)
-    
-    if not categorie:
-        print("\n✗ Catégorie non trouvée")
-        pause()
-        return
-    
     print(f"\nCatégorie: {categorie[1]}")
     confirm = input("Confirmer la suppression? (oui/non): ")
     
@@ -457,20 +491,23 @@ def voir_produits_categorie():
     clear_screen()
     afficher_titre("Produits par Catégorie")
     
-    # Afficher les catégories
     categories = lire_categories()
-    if categories:
-        print(tabulate(categories, headers=["ID", "Nom", "Description"], tablefmt="simple"))
-    
-    cat_id = saisie_uuid("\nID de la catégorie: ")
-    if not cat_id:
+    if not categories:
+        print("\nAucune catégorie.")
         pause()
         return
-    produits = produits_par_categorie(cat_id)
     
+    afficher_categories_tableau(categories)
+    cat_id = selectionner_element(categories, "N° de la catégorie")
+    
+    if not cat_id:
+        return
+    
+    produits = produits_par_categorie(cat_id)
     if produits:
-        headers = ["ID", "Réf.", "Nom", "Prix", "Stock"]
-        print(tabulate(produits, headers=headers, tablefmt="grid"))
+        headers = ["#", "Réf.", "Nom", "Prix", "Stock"]
+        data = [[i+1, p[1], p[2], f"{p[3]}€", p[4]] for i, p in enumerate(produits)]
+        print(tabulate(data, headers=headers, tablefmt="grid"))
     else:
         print("\nAucun produit dans cette catégorie.")
     pause()
@@ -494,7 +531,7 @@ def menu_fournisseurs():
         choix = input("\nVotre choix: ")
         
         if choix == "1":
-            lister_fournisseurs()
+            lister_fournisseurs_menu()
         elif choix == "2":
             ajouter_fournisseur()
         elif choix == "3":
@@ -505,17 +542,24 @@ def menu_fournisseurs():
             return
 
 
-def lister_fournisseurs():
+def afficher_fournisseurs_tableau(fournisseurs):
+    """Affiche les fournisseurs dans un tableau"""
+    if not fournisseurs:
+        print("\nAucun fournisseur trouvé.")
+        return
+    
+    headers = ["#", "Nom", "Email", "Téléphone", "Adresse"]
+    data = [[i+1, f[1], f[2] or "-", f[3] or "-", f[4] or "-"] 
+            for i, f in enumerate(fournisseurs)]
+    print(tabulate(data, headers=headers, tablefmt="grid"))
+
+
+def lister_fournisseurs_menu():
     """Afficher la liste des fournisseurs"""
     clear_screen()
     afficher_titre("Liste des Fournisseurs")
     fournisseurs = lire_fournisseurs()
-    
-    if fournisseurs:
-        headers = ["ID", "Nom", "Email", "Téléphone", "Adresse"]
-        print(tabulate(fournisseurs, headers=headers, tablefmt="grid"))
-    else:
-        print("\nAucun fournisseur trouvé.")
+    afficher_fournisseurs_tableau(fournisseurs)
     pause()
 
 
@@ -532,7 +576,7 @@ def ajouter_fournisseur():
     four_id = creer_fournisseur(nom, email, telephone, adresse)
     
     if four_id:
-        print(f"\n✓ Fournisseur créé avec succès (ID: {four_id})")
+        print(f"\n✓ Fournisseur créé avec succès")
     else:
         print("\n✗ Erreur lors de la création")
     pause()
@@ -543,23 +587,24 @@ def modifier_fournisseur_menu():
     clear_screen()
     afficher_titre("Modifier un Fournisseur")
     
-    four_id = saisie_uuid("ID du fournisseur: ")
+    fournisseurs = lire_fournisseurs()
+    if not fournisseurs:
+        print("\nAucun fournisseur à modifier.")
+        pause()
+        return
+    
+    afficher_fournisseurs_tableau(fournisseurs)
+    four_id = selectionner_element(fournisseurs, "N° du fournisseur à modifier")
+    
     if not four_id:
-        print("\n✗ ID requis")
-        pause()
         return
+    
     fournisseur = lire_fournisseur(four_id)
-    
-    if not fournisseur:
-        print("\n✗ Fournisseur non trouvé")
-        pause()
-        return
-    
-    print(f"\nFournisseur actuel: {fournisseur[1]}")
+    print(f"\nFournisseur: {fournisseur[1]}")
     nom = input(f"Nom [{fournisseur[1]}]: ") or None
-    email = input(f"Email [{fournisseur[2]}]: ") or None
-    telephone = input(f"Téléphone [{fournisseur[3]}]: ") or None
-    adresse = input(f"Adresse [{fournisseur[4]}]: ") or None
+    email = input(f"Email [{fournisseur[2] or '-'}]: ") or None
+    telephone = input(f"Téléphone [{fournisseur[3] or '-'}]: ") or None
+    adresse = input(f"Adresse [{fournisseur[4] or '-'}]: ") or None
     
     if modifier_fournisseur(four_id, nom, email, telephone, adresse):
         print("\n✓ Fournisseur modifié avec succès")
@@ -573,18 +618,19 @@ def supprimer_fournisseur_menu():
     clear_screen()
     afficher_titre("Supprimer un Fournisseur")
     
-    four_id = saisie_uuid("ID du fournisseur: ")
+    fournisseurs = lire_fournisseurs()
+    if not fournisseurs:
+        print("\nAucun fournisseur à supprimer.")
+        pause()
+        return
+    
+    afficher_fournisseurs_tableau(fournisseurs)
+    four_id = selectionner_element(fournisseurs, "N° du fournisseur à supprimer")
+    
     if not four_id:
-        print("\n✗ ID requis")
-        pause()
         return
+    
     fournisseur = lire_fournisseur(four_id)
-    
-    if not fournisseur:
-        print("\n✗ Fournisseur non trouvé")
-        pause()
-        return
-    
     print(f"\nFournisseur: {fournisseur[1]}")
     confirm = input("Confirmer la suppression? (oui/non): ")
     
@@ -627,19 +673,21 @@ def faire_entree_stock():
     clear_screen()
     afficher_titre("Entrée de Stock")
     
-    # Afficher les produits
-    print("\nProduits disponibles:")
     produits = lire_produits()
-    if produits:
-        headers = ["ID", "Réf.", "Nom", "Stock actuel"]
-        data = [[p[0], p[1], p[2], p[5]] for p in produits]
-        print(tabulate(data, headers=headers, tablefmt="simple"))
-    
-    produit_id = saisie_uuid("\nID du produit: ")
-    if not produit_id:
-        print("\n✗ ID requis")
+    if not produits:
+        print("\nAucun produit.")
         pause()
         return
+    
+    print("\nProduits disponibles:")
+    headers = ["#", "Réf.", "Nom", "Stock actuel"]
+    data = [[i+1, p[1], p[2], p[4]] for i, p in enumerate(produits)]
+    print(tabulate(data, headers=headers, tablefmt="simple"))
+    
+    produit_id = selectionner_element(produits, "N° du produit")
+    if not produit_id:
+        return
+    
     quantite = saisie_int("Quantité à ajouter: ")
     motif = input("Motif (optionnel): ") or None
     
@@ -657,19 +705,21 @@ def faire_sortie_stock():
     clear_screen()
     afficher_titre("Sortie de Stock")
     
-    # Afficher les produits
-    print("\nProduits disponibles:")
     produits = lire_produits()
-    if produits:
-        headers = ["ID", "Réf.", "Nom", "Stock actuel"]
-        data = [[p[0], p[1], p[2], p[5]] for p in produits]
-        print(tabulate(data, headers=headers, tablefmt="simple"))
-    
-    produit_id = saisie_uuid("\nID du produit: ")
-    if not produit_id:
-        print("\n✗ ID requis")
+    if not produits:
+        print("\nAucun produit.")
         pause()
         return
+    
+    print("\nProduits disponibles:")
+    headers = ["#", "Réf.", "Nom", "Stock actuel"]
+    data = [[i+1, p[1], p[2], p[4]] for i, p in enumerate(produits)]
+    print(tabulate(data, headers=headers, tablefmt="simple"))
+    
+    produit_id = selectionner_element(produits, "N° du produit")
+    if not produit_id:
+        return
+    
     quantite = saisie_int("Quantité à retirer: ")
     motif = input("Motif (optionnel): ") or None
     
@@ -678,7 +728,7 @@ def faire_sortie_stock():
     if mouv_id:
         print(f"\n✓ Sortie de stock enregistrée")
     else:
-        print("\n✗ Erreur lors de l'enregistrement (stock insuffisant?)")
+        print("\n✗ Erreur (stock insuffisant?)")
     pause()
 
 
@@ -690,8 +740,9 @@ def voir_historique():
     mouvements = lire_mouvements(50)
     
     if mouvements:
-        headers = ["ID", "Réf.", "Produit", "Type", "Qté", "Motif", "Date"]
-        print(tabulate(mouvements, headers=headers, tablefmt="grid"))
+        headers = ["Réf.", "Produit", "Type", "Qté", "Motif", "Date"]
+        data = [[m[1], m[2], m[3], m[4], m[5] or "-", str(m[6])[:19]] for m in mouvements]
+        print(tabulate(data, headers=headers, tablefmt="grid"))
     else:
         print("\nAucun mouvement enregistré.")
     pause()
@@ -709,8 +760,9 @@ def afficher_alertes_stock():
     produits = produits_en_alerte()
     
     if produits:
-        headers = ["ID", "Réf.", "Nom", "Stock", "Seuil", "Catégorie"]
-        print(tabulate(produits, headers=headers, tablefmt="grid"))
+        headers = ["#", "Réf.", "Nom", "Stock", "Seuil", "Catégorie"]
+        data = [[i+1, p[1], p[2], p[3], p[4], p[5] or "-"] for i, p in enumerate(produits)]
+        print(tabulate(data, headers=headers, tablefmt="grid"))
         print(f"\n⚠️  {len(produits)} produit(s) en alerte de stock!")
     else:
         print("\n✓ Aucun produit en alerte de stock.")
@@ -746,17 +798,23 @@ def menu_utilisateurs():
             return
 
 
+def afficher_utilisateurs_tableau(utilisateurs):
+    """Affiche les utilisateurs dans un tableau"""
+    if not utilisateurs:
+        print("\nAucun utilisateur trouvé.")
+        return
+    
+    headers = ["#", "Username", "Rôle", "Actif"]
+    data = [[i+1, u[1], u[2], "Oui" if u[3] else "Non"] for i, u in enumerate(utilisateurs)]
+    print(tabulate(data, headers=headers, tablefmt="grid"))
+
+
 def lister_utilisateurs_menu():
     """Afficher la liste des utilisateurs"""
     clear_screen()
     afficher_titre("Liste des Utilisateurs")
     utilisateurs = lire_utilisateurs()
-    
-    if utilisateurs:
-        headers = ["ID", "Username", "Rôle", "Actif"]
-        print(tabulate(utilisateurs, headers=headers, tablefmt="grid"))
-    else:
-        print("\nAucun utilisateur trouvé.")
+    afficher_utilisateurs_tableau(utilisateurs)
     pause()
 
 
@@ -786,11 +844,18 @@ def modifier_mdp_menu():
     clear_screen()
     afficher_titre("Modifier Mot de Passe")
     
-    user_id = saisie_uuid("ID de l'utilisateur: ")
-    if not user_id:
-        print("\n✗ ID requis")
+    utilisateurs = lire_utilisateurs()
+    if not utilisateurs:
+        print("\nAucun utilisateur.")
         pause()
         return
+    
+    afficher_utilisateurs_tableau(utilisateurs)
+    user_id = selectionner_element(utilisateurs, "N° de l'utilisateur")
+    
+    if not user_id:
+        return
+    
     nouveau_mdp = input("Nouveau mot de passe: ")
     
     if modifier_mot_de_passe(user_id, nouveau_mdp):
@@ -805,10 +870,16 @@ def desactiver_utilisateur_menu():
     clear_screen()
     afficher_titre("Désactiver un Utilisateur")
     
-    user_id = saisie_uuid("ID de l'utilisateur: ")
-    if not user_id:
-        print("\n✗ ID requis")
+    utilisateurs = lire_utilisateurs()
+    if not utilisateurs:
+        print("\nAucun utilisateur.")
         pause()
+        return
+    
+    afficher_utilisateurs_tableau(utilisateurs)
+    user_id = selectionner_element(utilisateurs, "N° de l'utilisateur à désactiver")
+    
+    if not user_id:
         return
     
     if desactiver_utilisateur(user_id):
@@ -819,8 +890,52 @@ def desactiver_utilisateur_menu():
 
 
 # ============================================
-# AUTHENTIFICATION
+# AUTHENTIFICATION & INSCRIPTION
 # ============================================
+
+def inscription():
+    """Inscription d'un nouvel utilisateur"""
+    clear_screen()
+    afficher_titre("Inscription")
+    
+    print("\nCréation d'un nouveau compte")
+    username = input("Nom d'utilisateur: ")
+    
+    if not username:
+        print("\n✗ Le nom d'utilisateur est requis")
+        pause()
+        return False
+    
+    mot_de_passe = input("Mot de passe: ")
+    if not mot_de_passe:
+        print("\n✗ Le mot de passe est requis")
+        pause()
+        return False
+    
+    confirmer = input("Confirmer le mot de passe: ")
+    if mot_de_passe != confirmer:
+        print("\n✗ Les mots de passe ne correspondent pas")
+        pause()
+        return False
+    
+    # Premier utilisateur = admin, sinon user
+    nb_users = compter_utilisateurs()
+    role = 'admin' if nb_users == 0 else 'user'
+    
+    user_id = creer_utilisateur(username, mot_de_passe, role)
+    
+    if user_id:
+        if role == 'admin':
+            print(f"\n✓ Compte administrateur créé avec succès!")
+        else:
+            print(f"\n✓ Compte créé avec succès!")
+        pause()
+        return True
+    else:
+        print("\n✗ Erreur lors de la création du compte")
+        pause()
+        return False
+
 
 def ecran_connexion():
     """Écran de connexion"""
@@ -828,9 +943,10 @@ def ecran_connexion():
     
     while True:
         clear_screen()
-        afficher_titre("GESTION DE STOCK - Connexion")
+        afficher_titre("GESTION DE STOCK - Bienvenue")
         
         print("\n1. Se connecter")
+        print("2. S'inscrire")
         print("0. Quitter")
         
         choix = input("\nVotre choix: ")
@@ -850,6 +966,8 @@ def ecran_connexion():
             else:
                 print("\n✗ Identifiants incorrects")
                 pause()
+        elif choix == "2":
+            inscription()
         elif choix == "0":
             print("\nAu revoir!")
             sys.exit(0)

@@ -107,9 +107,3 @@ INSERT INTO produits (id, reference, nom, description, prix_unitaire, quantite_s
     ('a7b8c9d0-e1f2-3456-0123-567890123456', 'ELEC-002', 'Clavier mécanique', 'Clavier mécanique RGB', 89.99, 30, 5, 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'd4e5f6a7-b8c9-0123-def0-234567890123'),
     ('b8c9d0e1-f2a3-4567-1234-678901234567', 'BURO-001', 'Stylo bleu', 'Lot de 10 stylos bleus', 5.99, 200, 50, 'b2c3d4e5-f6a7-8901-bcde-f12345678901', 'e5f6a7b8-c9d0-1234-ef01-345678901234'),
     ('c9d0e1f2-a3b4-5678-2345-789012345678', 'INFO-001', 'Câble HDMI 2m', 'Câble HDMI haute vitesse 2 mètres', 12.99, 100, 20, 'c3d4e5f6-a7b8-9012-cdef-123456789012', 'd4e5f6a7-b8c9-0123-def0-234567890123');
-
--- Utilisateur admin par défaut (mot de passe: admin123 - hashé avec SHA256)
--- Note: En production, changer ce mot de passe!
--- Hash SHA256 de "admin123" = 240be518fabd2724ddb6f04eeb9d5b0a
-INSERT INTO utilisateurs (id, username, password_hash, role) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'admin', '240be518fabd2724ddb6f04eeb9d5b0aec142dce62670da4ad7b9d9b9f0b9de4', 'admin');

@@ -1,9 +1,11 @@
 """
-CRUD pour la table utilisateurs (sécurité)
+CRUD pour la table utilisateurs avec SQLAlchemy
+Gestion de l'authentification
 """
 
 import hashlib
-from connexion import get_connexion, get_curseur, fermer_connexion
+from connexion import get_session
+from models import Utilisateur
 
 
 def hasher_mot_de_passe(mot_de_passe):
@@ -13,160 +15,169 @@ def hasher_mot_de_passe(mot_de_passe):
 
 def creer_utilisateur(username, mot_de_passe, role='user'):
     """Créer un nouvel utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
+        # Vérifier si le username existe déjà
+        existant = session.query(Utilisateur).filter(Utilisateur.username == username).first()
+        if existant:
+            print("Ce nom d'utilisateur existe déjà")
+            return None
+        
         password_hash = hasher_mot_de_passe(mot_de_passe)
-        curseur.execute(
-            """INSERT INTO utilisateurs (username, password_hash, role) 
-               VALUES (%s, %s, %s) RETURNING id""",
-            (username, password_hash, role)
+        utilisateur = Utilisateur(
+            username=username,
+            password_hash=password_hash,
+            role=role
         )
-        utilisateur_id = curseur.fetchone()[0]
-        conn.commit()
-        return utilisateur_id
+        session.add(utilisateur)
+        session.commit()
+        return utilisateur.id
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la création: {e}")
         return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def authentifier(username, mot_de_passe):
     """Authentifier un utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
         password_hash = hasher_mot_de_passe(mot_de_passe)
-        curseur.execute(
-            """SELECT id, username, role FROM utilisateurs 
-               WHERE username = %s AND password_hash = %s AND actif = TRUE""",
-            (username, password_hash)
-        )
-        return curseur.fetchone()
+        utilisateur = session.query(Utilisateur).filter(
+            Utilisateur.username == username,
+            Utilisateur.password_hash == password_hash,
+            Utilisateur.actif == True
+        ).first()
+        
+        if utilisateur:
+            return (utilisateur.id, utilisateur.username, utilisateur.role)
+        return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def lire_utilisateurs():
     """Lire tous les utilisateurs"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute(
-            "SELECT id, username, role, actif FROM utilisateurs ORDER BY username"
-        )
-        return curseur.fetchall()
+        utilisateurs = session.query(Utilisateur).order_by(Utilisateur.username).all()
+        return [(u.id, u.username, u.role, u.actif) for u in utilisateurs]
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def lire_utilisateur(utilisateur_id):
     """Lire un utilisateur par son ID"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute(
-            "SELECT id, username, role, actif FROM utilisateurs WHERE id = %s",
-            (utilisateur_id,)
-        )
-        return curseur.fetchone()
+        u = session.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+        if u:
+            return (u.id, u.username, u.role, u.actif)
+        return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def modifier_mot_de_passe(utilisateur_id, nouveau_mot_de_passe):
     """Modifier le mot de passe d'un utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        password_hash = hasher_mot_de_passe(nouveau_mot_de_passe)
-        curseur.execute(
-            "UPDATE utilisateurs SET password_hash = %s WHERE id = %s",
-            (password_hash, utilisateur_id)
-        )
-        conn.commit()
-        return curseur.rowcount > 0
+        utilisateur = session.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+        if utilisateur:
+            utilisateur.password_hash = hasher_mot_de_passe(nouveau_mot_de_passe)
+            session.commit()
+            return True
+        return False
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la modification: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def modifier_role(utilisateur_id, nouveau_role):
     """Modifier le rôle d'un utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
         if nouveau_role not in ('admin', 'user'):
             print("Rôle invalide. Utilisez 'admin' ou 'user'.")
             return False
-        curseur.execute(
-            "UPDATE utilisateurs SET role = %s WHERE id = %s",
-            (nouveau_role, utilisateur_id)
-        )
-        conn.commit()
-        return curseur.rowcount > 0
+        
+        utilisateur = session.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+        if utilisateur:
+            utilisateur.role = nouveau_role
+            session.commit()
+            return True
+        return False
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la modification: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def desactiver_utilisateur(utilisateur_id):
     """Désactiver un utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute(
-            "UPDATE utilisateurs SET actif = FALSE WHERE id = %s",
-            (utilisateur_id,)
-        )
-        conn.commit()
-        return curseur.rowcount > 0
+        utilisateur = session.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+        if utilisateur:
+            utilisateur.actif = False
+            session.commit()
+            return True
+        return False
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la désactivation: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def activer_utilisateur(utilisateur_id):
     """Activer un utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute(
-            "UPDATE utilisateurs SET actif = TRUE WHERE id = %s",
-            (utilisateur_id,)
-        )
-        conn.commit()
-        return curseur.rowcount > 0
+        utilisateur = session.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+        if utilisateur:
+            utilisateur.actif = True
+            session.commit()
+            return True
+        return False
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de l'activation: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def supprimer_utilisateur(utilisateur_id):
     """Supprimer un utilisateur"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute("DELETE FROM utilisateurs WHERE id = %s", (utilisateur_id,))
-        conn.commit()
-        return curseur.rowcount > 0
+        utilisateur = session.query(Utilisateur).filter(Utilisateur.id == utilisateur_id).first()
+        if utilisateur:
+            session.delete(utilisateur)
+            session.commit()
+            return True
+        return False
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la suppression: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
+
+
+def compter_utilisateurs():
+    """Compter le nombre d'utilisateurs"""
+    session = get_session()
+    try:
+        return session.query(Utilisateur).count()
+    finally:
+        session.close()

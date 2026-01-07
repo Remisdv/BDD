@@ -1,97 +1,85 @@
 """
-CRUD pour la table categories
+CRUD pour la table categories avec SQLAlchemy
 """
 
-from connexion import get_connexion, get_curseur, fermer_connexion
+from connexion import get_session
+from models import Categorie
 
 
 def creer_categorie(nom, description=None):
     """Créer une nouvelle catégorie"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute(
-            "INSERT INTO categories (nom, description) VALUES (%s, %s) RETURNING id",
-            (nom, description)
-        )
-        categorie_id = curseur.fetchone()[0]
-        conn.commit()
-        return categorie_id
+        categorie = Categorie(nom=nom, description=description)
+        session.add(categorie)
+        session.commit()
+        return categorie.id
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la création: {e}")
         return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def lire_categories():
     """Lire toutes les catégories"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute("SELECT id, nom, description FROM categories ORDER BY nom")
-        return curseur.fetchall()
+        categories = session.query(Categorie).order_by(Categorie.nom).all()
+        return [(c.id, c.nom, c.description) for c in categories]
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def lire_categorie(categorie_id):
     """Lire une catégorie par son ID"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute(
-            "SELECT id, nom, description FROM categories WHERE id = %s",
-            (categorie_id,)
-        )
-        return curseur.fetchone()
+        c = session.query(Categorie).filter(Categorie.id == categorie_id).first()
+        if c:
+            return (c.id, c.nom, c.description)
+        return None
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def modifier_categorie(categorie_id, nom=None, description=None):
     """Modifier une catégorie existante"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        updates = []
-        values = []
-        
-        if nom is not None:
-            updates.append("nom = %s")
-            values.append(nom)
-        if description is not None:
-            updates.append("description = %s")
-            values.append(description)
-        
-        if not updates:
+        categorie = session.query(Categorie).filter(Categorie.id == categorie_id).first()
+        if not categorie:
             return False
         
-        values.append(categorie_id)
-        query = f"UPDATE categories SET {', '.join(updates)} WHERE id = %s"
-        curseur.execute(query, values)
-        conn.commit()
-        return curseur.rowcount > 0
+        if nom is not None:
+            categorie.nom = nom
+        if description is not None:
+            categorie.description = description
+        
+        session.commit()
+        return True
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la modification: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
 
 
 def supprimer_categorie(categorie_id):
     """Supprimer une catégorie"""
-    conn = get_connexion()
-    curseur = get_curseur(conn)
+    session = get_session()
     try:
-        curseur.execute("DELETE FROM categories WHERE id = %s", (categorie_id,))
-        conn.commit()
-        return curseur.rowcount > 0
+        categorie = session.query(Categorie).filter(Categorie.id == categorie_id).first()
+        if categorie:
+            session.delete(categorie)
+            session.commit()
+            return True
+        return False
     except Exception as e:
-        conn.rollback()
+        session.rollback()
         print(f"Erreur lors de la suppression: {e}")
         return False
     finally:
-        fermer_connexion(conn, curseur)
+        session.close()
