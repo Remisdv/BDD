@@ -21,9 +21,9 @@ if env_path.exists():
 # Configuration de la base de données (depuis .env)
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_PORT = os.getenv('DB_PORT', '5432')
-DB_NAME = os.getenv('POSTGRES_DB', 'gestion_stock')
-DB_USER = os.getenv('POSTGRES_USER', 'stock_user')
-DB_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'stock_password')
+DB_NAME = os.getenv('POSTGRES_DB', 'DB')
+DB_USER = os.getenv('POSTGRES_USER', 'root')
+DB_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'password')
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 

@@ -54,8 +54,9 @@ Des **index** sont créés pour optimiser les performances des requêtes et des 
 
     ```env
     POSTGRES_DB=gestion_stock
-    POSTGRES_USER=stock_user
-    POSTGRES_PASSWORD=your_strong_password
+    POSTGRES_USER=root
+    POSTGRES_PASSWORD=password
+    DB_HOST=localhost
     DB_PORT=5432
     ```
 
