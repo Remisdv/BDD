@@ -117,21 +117,6 @@ Un utilisateur `admin` est créé par défaut pour le premier accès :
 
 ---
 
-## Accès pgAdmin (Interface Web)
-
-- **URL** : http://localhost:8080
-- **Email** : admin@admin.com
-- **Password** : admin
-
-Pour ajouter le serveur PostgreSQL dans pgAdmin :
-- **Host** : db
-- **Port** : 5432
-- **Database** : gestion_stock
-- **Username** : stock_user
-- **Password** : stock_password
-
----
-
 ## Structure de la Base de Données
 
 ### Tables
@@ -220,5 +205,4 @@ docker-compose up -d
 - **psycopg2** - Driver PostgreSQL pour Python
 - **PostgreSQL 16** - Base de données relationnelle
 - **Docker Compose** - Orchestration des conteneurs
-- **pgAdmin 4** - Interface d'administration web
 - **tabulate** - Affichage des tableaux en console

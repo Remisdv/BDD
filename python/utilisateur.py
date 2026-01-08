@@ -98,6 +98,19 @@ def modifier_mot_de_passe(utilisateur_id, nouveau_mot_de_passe):
         session.close()
 
 
+def admin_existe():
+    """Vérifie si au moins un utilisateur admin actif existe."""
+    session = get_session()
+    try:
+        count = session.query(Utilisateur).filter(Utilisateur.role == 'admin', Utilisateur.actif == True).count()
+        session.close()
+        return count > 0
+    except Exception as e:
+        print(f"Erreur lors de la vérification de l'admin: {e}")
+        session.close()
+        return False
+
+
 def modifier_role(utilisateur_id, nouveau_role):
     """Modifier le rôle d'un utilisateur"""
     session = get_session()

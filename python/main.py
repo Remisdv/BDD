@@ -18,7 +18,7 @@ from produit import (creer_produit, lire_produits, lire_produit, modifier_produi
                      produits_par_categorie)
 from mouvement import (entree_stock, sortie_stock, lire_mouvements, historique_produit)
 from utilisateur import (authentifier, creer_utilisateur, lire_utilisateurs,
-                         modifier_mot_de_passe, desactiver_utilisateur, compter_utilisateurs)
+                         modifier_mot_de_passe, desactiver_utilisateur, compter_utilisateurs, admin_existe)
 
 
 # Variable globale pour l'utilisateur connecté
@@ -946,7 +946,8 @@ def ecran_connexion():
         afficher_titre("GESTION DE STOCK - Bienvenue")
         
         print("\n1. Se connecter")
-        print("2. S'inscrire")
+        if not admin_existe():
+            print("2. S'inscrire")
         print("0. Quitter")
         
         choix = input("\nVotre choix: ")
@@ -966,7 +967,7 @@ def ecran_connexion():
             else:
                 print("\n✗ Identifiants incorrects")
                 pause()
-        elif choix == "2":
+        elif choix == "2" and not admin_existe():
             inscription()
         elif choix == "0":
             print("\nAu revoir!")
